@@ -1,0 +1,72 @@
+name: Déploiement — tools.macerti.com/duration_calculator
+
+# Se déclenche à chaque push sur main (ex: merge d'une branche de travail),
+# ou manuellement depuis l'onglet "Actions" de GitHub (bouton "Run workflow").
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Annule un déploiement en cours si un nouveau push arrive entre-temps,
+# pour éviter que deux déploiements ne s'entremêlent sur le serveur.
+concurrency:
+  group: duration-calculator-production-deploy
+  cancel-in-progress: true
+
+jobs:
+  test-deploy:
+    name: Tests, déploiement
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v6
+
+      - name: Installation de PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+
+      # Ce dépôt est directement le dossier déployable (pas de build à faire :
+      # le frontend est un export Expo web déjà généré, le backend est du PHP
+      # natif). On teste uniquement le moteur de calcul (engine/ + data/),
+      # qui ne nécessite ni base de données ni config.php.
+      - name: Tests du moteur de calcul (smoke tests)
+        run: php tests/smoke_test.php
+
+      # IMPORTANT — sécurité :
+      # - dangerous-clean-slate reste à "false" : cette action ne supprime
+      #   JAMAIS de fichiers côté serveur qui ne sont pas dans ce dépôt. Le
+      #   véritable config.php (avec les identifiants MariaDB réels) ne vit
+      #   QUE sur le serveur, jamais dans ce dépôt Git (voir .gitignore) —
+      #   il est donc automatiquement ignoré et jamais écrasé ni supprimé.
+      # - "exclude" ajoute une double protection explicite sur config.php,
+      #   au cas où un futur commit l'ajouterait par erreur au dépôt.
+      - name: Déploiement FTPS vers l'hébergement mutualisé
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21 # à adapter si votre hébergeur utilise un autre port FTPS
+          local-dir: ./
+          server-dir: ${{ vars.FTP_SERVER_DIR }}
+          state-name: .ftp-deploy-sync-state.json
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/config.php
+            **/tests/**
+
+      # Vérification informative uniquement — n'échoue jamais le workflow,
+      # car un backend momentanément indisponible ne veut pas dire que le
+      # déploiement des fichiers a échoué.
+      - name: Vérification post-déploiement (health check)
+        run: |
+          echo "Contrôle de https://tools.macerti.com/duration_calculator/api/health"
+          curl -sf https://tools.macerti.com/duration_calculator/api/health && echo || echo "⚠️ Health check injoignable ou en erreur — à vérifier manuellement (config.php peut ne pas être configuré côté serveur)."
+        continue-on-error: true

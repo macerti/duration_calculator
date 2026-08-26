@@ -1,0 +1,13 @@
+# Real DB credentials — never commit. Copy config.example.php -> config.php locally / on server.
+config.php
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local env
+.env
+.env.local
