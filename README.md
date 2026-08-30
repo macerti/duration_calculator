@@ -1,8 +1,5 @@
 # Audit Duration Calculator — Deployable Single Folder
 
-**Live app:** https://tools.macerti.com/duration_calculator/
-**New to this project?** Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md).
-
 This is one self-contained folder: extract it, upload it as-is to
 `tools.macerti.com/duration_calculator/`, and it works — frontend (static
 files) and backend (PHP API) both live inside `duration_calculator/`.

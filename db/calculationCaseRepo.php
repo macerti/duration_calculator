@@ -3,12 +3,12 @@ declare(strict_types=1);
 
 namespace AuditEngine;
 
-function saveCalculationCase(array $input, array $result, ?int $clientId = null, string $status = 'draft'): int
+function saveCalculationCase(array $input, array $result, ?int $clientId = null, string $status = 'draft', ?array $wizardState = null): int
 {
     $stmt = getPdo()->prepare(
         'INSERT INTO calculation_cases
-          (dossier_ref, client_id, status, parameter_set_id, commercial, scope_text, input_json, result_json, total_days)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          (dossier_ref, client_id, status, parameter_set_id, commercial, scope_text, input_json, result_json, total_days, wizard_state_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         $input['dossierRef'],
@@ -20,11 +20,12 @@ function saveCalculationCase(array $input, array $result, ?int $clientId = null,
         json_encode($input),
         json_encode($result),
         $result['totalDaysAllSites'],
+        $wizardState !== null ? json_encode($wizardState) : null,
     ]);
     return (int)getPdo()->lastInsertId();
 }
 
-function updateCalculationCase(int $id, array $input, array $result, ?string $status, ?array $roundingOverrides): bool
+function updateCalculationCase(int $id, array $input, array $result, ?string $status, ?array $roundingOverrides, ?array $wizardState = null): bool
 {
     $sets = ['input_json = ?', 'result_json = ?', 'total_days = ?'];
     $params = [json_encode($input), json_encode($result), $result['totalDaysAllSites']];
@@ -35,6 +36,10 @@ function updateCalculationCase(int $id, array $input, array $result, ?string $st
     if ($roundingOverrides !== null) {
         $sets[] = 'rounding_overrides_json = ?';
         $params[] = json_encode($roundingOverrides);
+    }
+    if ($wizardState !== null) {
+        $sets[] = 'wizard_state_json = ?';
+        $params[] = json_encode($wizardState);
     }
     $params[] = $id;
     $stmt = getPdo()->prepare('UPDATE calculation_cases SET ' . implode(', ', $sets) . ' WHERE id = ?');
@@ -75,7 +80,7 @@ function listCalculationCases(int $limit = 50, ?int $clientId = null): array
 function getCalculationCase(int $id): ?array
 {
     $stmt = getPdo()->prepare(
-        'SELECT input_json, result_json, client_id, status, rounding_overrides_json
+        'SELECT input_json, result_json, client_id, status, rounding_overrides_json, wizard_state_json
          FROM calculation_cases WHERE id = ?'
     );
     $stmt->execute([$id]);
@@ -87,6 +92,7 @@ function getCalculationCase(int $id): ?array
         'clientId' => $row['client_id'] !== null ? (int)$row['client_id'] : null,
         'status' => $row['status'],
         'roundingOverrides' => $row['rounding_overrides_json'] ? json_decode($row['rounding_overrides_json'], true) : null,
+        'wizardState' => $row['wizard_state_json'] ? json_decode($row['wizard_state_json'], true) : null,
     ];
 }
 

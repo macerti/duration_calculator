@@ -47,10 +47,10 @@ function findNaceEntry(string $codeNace, array $params): ?array
 }
 
 /**
- * Matches against description (accent-insensitive), NACE code, or EAC code —
- * whichever the person actually typed. "39" should surface any sector whose
- * NACE or EAC code contains "39", not just descriptions containing the
- * literal digits.
+ * Matches against description (accent-insensitive), NACE code, EAC code, or
+ * any of the three per-standard technical reference codes (e.g. "14.2" for
+ * QM/quality, "OH8" for OH/safety, "EM1" for EM/environment) — whichever
+ * the person actually typed.
  */
 function searchNaceByDescription(string $query, array $params): array
 {
@@ -61,5 +61,8 @@ function searchNaceByDescription(string $query, array $params): array
         fn($e) => str_contains(foldAccents($e['description']), $q)
             || str_contains(auditMbStrtolower($e['codeNace']), $q)
             || str_contains(auditMbStrtolower($e['codeEac']), $q)
+            || str_contains(auditMbStrtolower($e['codeQmQualite']), $q)
+            || str_contains(auditMbStrtolower($e['codeOhSecurite']), $q)
+            || str_contains(auditMbStrtolower($e['codeEmEnvironnement']), $q)
     ));
 }

@@ -47,8 +47,8 @@ function updateClientName(int $id, string $name): bool
     return $stmt->execute([trim($name), $id]);
 }
 
-/** Calculations belonging to this client are orphaned (client_id -> NULL via
- * the FK's ON DELETE SET NULL), never destroyed — see schema.sql comment. */
+/** Deleting a client cascades to delete its calculations too (FK ON DELETE
+ * CASCADE) — explicit decision, see ROADMAP.md decisions log. */
 function deleteClient(int $id): bool
 {
     $stmt = getPdo()->prepare('DELETE FROM clients WHERE id = ?');

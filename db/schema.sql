@@ -84,7 +84,7 @@ SET @sql := IF(@col_exists = 0,
      ADD COLUMN client_id INT UNSIGNED NULL AFTER dossier_ref,
      ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT ''draft'' AFTER client_id,
      ADD COLUMN rounding_overrides_json LONGTEXT NULL AFTER result_json,
-     ADD CONSTRAINT fk_calculation_cases_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+     ADD CONSTRAINT fk_calculation_cases_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
      ADD KEY idx_calculation_cases_client_id (client_id)',
   'SELECT 1'
 );
@@ -92,12 +92,11 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- If the columns above already existed from an earlier version (before this
--- ON DELETE SET NULL was added), the FK was created without it — deleting a
--- client would fail outright rather than orphaning its calculations.
--- Calculations are the real data here; clients are just a label (see
--- ORIENTATIONS.md), so a deleted client should never destroy its
--- calculations. This re-points the FK if it's missing the clause.
+-- Explicit decision (revised 2026-08-24, see ROADMAP.md decisions log):
+-- deleting a client now deletes its calculations too, rather than orphaning
+-- them (the earlier 4.0.0 behavior). Re-points the FK to CASCADE regardless
+-- of which earlier state it's currently in (un-set/RESTRICT-default, or the
+-- SET NULL this project shipped with in 4.0.0).
 SET @fk_name := (
   SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'calculation_cases'
@@ -106,13 +105,33 @@ SET @fk_name := (
 );
 SET @needs_fix := (
   SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS
-  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = @fk_name AND DELETE_RULE != 'SET NULL'
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = @fk_name AND DELETE_RULE != 'CASCADE'
 );
 SET @sql2 := IF(@fk_name IS NOT NULL AND @needs_fix > 0,
   CONCAT('ALTER TABLE calculation_cases DROP FOREIGN KEY ', @fk_name,
-         ', ADD CONSTRAINT fk_calculation_cases_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL'),
+         ', ADD CONSTRAINT fk_calculation_cases_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE'),
   'SELECT 1'
 );
 PREPARE stmt2 FROM @sql2;
 EXECUTE stmt2;
 DEALLOCATE PREPARE stmt2;
+
+-- Full wizard editing state (sites with sectors, personnel, per-standard
+-- factor/synergy config) as its own JSON blob, separate from input_json
+-- (the engine-ready computed input) and result_json (engine output).
+-- Needed so reopening a saved calculation can fully restore the editable
+-- wizard UI, not just show the last computed result — resolved risk levels
+-- and factor totals in input_json/result_json don't carry enough
+-- information to reconstruct which sectors were picked, which catalogue
+-- items were ticked, etc.
+SET @wiz_col_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'calculation_cases' AND COLUMN_NAME = 'wizard_state_json'
+);
+SET @sql3 := IF(@wiz_col_exists = 0,
+  'ALTER TABLE calculation_cases ADD COLUMN wizard_state_json LONGTEXT NULL AFTER rounding_overrides_json',
+  'SELECT 1'
+);
+PREPARE stmt3 FROM @sql3;
+EXECUTE stmt3;
+DEALLOCATE PREPARE stmt3;

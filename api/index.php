@@ -198,14 +198,17 @@ try {
     // --- Calculation cases ---
     if ($method === 'POST' && $segments === ['cases']) {
         requireDb($dbAvailable);
-        $input = jsonBody();
+        $body = jsonBody();
+        $wizardState = $body['wizardState'] ?? null;
+        $input = $body;
+        unset($input['wizardState']);
         if (isset($input['dossierRef'])) {
             $input['dossierRef'] = requireNonEmptyString((string)$input['dossierRef'], 'dossierRef', 128);
         }
         $clientId = isset($input['clientId']) ? (int)$input['clientId'] : null;
         $status = $input['status'] ?? 'draft';
         $result = calculateCase($input, $params);
-        $id = saveCalculationCase($input, $result, $clientId, $status);
+        $id = saveCalculationCase($input, $result, $clientId, $status, $wizardState);
         respond(['id' => $id, 'result' => $result], 201);
     }
 
@@ -219,8 +222,9 @@ try {
         }
         $status = $body['status'] ?? null;
         $roundingOverrides = $body['roundingOverrides'] ?? null;
+        $wizardState = $body['wizardState'] ?? null;
         $result = calculateCase($input, $params);
-        updateCalculationCase($id, $input, $result, $status, $roundingOverrides);
+        updateCalculationCase($id, $input, $result, $status, $roundingOverrides, $wizardState);
         respond(['id' => $id, 'result' => $result]);
     }
 
