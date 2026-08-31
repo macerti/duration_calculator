@@ -693,7 +693,7 @@ This repository is the **DEPLOYMENT ARTIFACT repository**, not the application s
 - Do not develop or permanently fix application logic directly in this repository.
 - Buildable source changes originate in macerti/duration_calculator_backend.
 - The generated Expo web artifact and deploy-ready PHP tree must be published here after source changes are tested.
-- The canonical build path is the manual **Build deploy artifact from source** workflow in .github/workflows/build-from-source.yml. It checks out source main, runs the Expo web export with the production API URL, copies the generated web artifact into this repository, and commits the result.
+- The canonical build path is the **Build, test and publish deployment artifact** workflow in `macerti/duration_calculator_backend` (`.github/workflows/build-test-publish.yml`). It runs the source tests, builds the Expo web artifact, assembles the PHP deployment tree, and publishes the resulting artifact here. The existing `.github/workflows/deploy.yml` in this repository is the separate FTP deployment action and must not be modified by source-build work.
 - PHP files at repository root are the deployable projection of duration-calculator-php/ from the source repository.
 - A deployment commit must never be described as a source fix unless the corresponding source commit exists in macerti/duration_calculator_backend.
 - Every hand-off must record the source commit and this repository's artifact commit.
