@@ -38,12 +38,26 @@ jobs:
           npm install
           npx expo export --platform web --clear
 
-      - name: Publish generated web files into deployment repository
+      - name: Publish generated web files and PHP deploy tree
         run: |
           rm -rf _generated_web
           cp -R _source/audit-mobile/dist _generated_web
           rm -rf _generated_web/assets/node_modules
           cp -R _generated_web/. .
+
+          # Replace the deployable PHP projection from source. Never touch
+          # config.php on the deployment host; it is intentionally absent
+          # from Git and is preserved by the FTPS workflow.
+          rm -rf api data db engine tests
+          cp -R _source/duration-calculator-php/api api
+          cp -R _source/duration-calculator-php/data data
+          cp -R _source/duration-calculator-php/db db
+          cp -R _source/duration-calculator-php/engine engine
+          cp -R _source/duration-calculator-php/tests tests
+          cp _source/duration-calculator-php/.htaccess .htaccess
+          cp _source/duration-calculator-php/config.example.php config.example.php
+          cp _source/duration-calculator-php/seed.php seed.php
+
           rm -rf _source _generated_web
           git status --short
 
