@@ -1,0 +1,60 @@
+name: Build deploy artifact from source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          repository: macerti/duration_calculator_backend
+          ref: main
+          path: _source
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: _source/audit-mobile/package.json
+
+      - name: Build Expo web artifact
+        working-directory: _source/audit-mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://tools.macerti.com/duration_calculator/api
+        run: |
+          npm install
+          npx expo export --platform web --clear
+
+      - name: Publish generated web files into deployment repository
+        run: |
+          rm -rf _generated_web
+          cp -R _source/audit-mobile/dist _generated_web
+          rm -rf _generated_web/assets/node_modules
+          cp -R _generated_web/. .
+          rm -rf _source _generated_web
+          git status --short
+
+      - name: Commit generated deployment artifact
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No generated artifact changes."
+            exit 0
+          fi
+          git add -A
+          git commit -m "build: publish web artifact from duration_calculator_backend"
+          git push
