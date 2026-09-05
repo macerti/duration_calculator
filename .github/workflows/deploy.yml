@@ -62,6 +62,39 @@ jobs:
             **/config.php
             **/tests/**
 
+      # Applique les migrations SQL en attente (db/migrations/*.sql) directement
+      # sur la vraie base de production, juste après que les fichiers soient
+      # arrivés sur le serveur. Ferme la lacune qui a causé BUG-045 (voir
+      # docs/BUGLOG.md du dépôt source) : avant cette étape, rien dans tout le
+      # pipeline n'exécutait jamais une migration contre la vraie base — ce
+      # workflow ne faisait que copier des fichiers par FTP, et la CI du dépôt
+      # source ne migre que sa propre base de test éphémère.
+      #
+      # Contrairement au health check ci-dessous, cette étape N'A PAS
+      # continue-on-error : un échec ici doit être visible immédiatement (croix
+      # rouge sur le workflow), pas silencieux — c'est exactement le genre de
+      # lacune silencieuse qui a causé l'incident BUG-045.
+      #
+      # ⚠️ Configuration unique requise côté serveur avant que ceci fonctionne :
+      # config.php doit contenir 'migration_secret' => '<même valeur que le
+      # secret MIGRATE_SECRET ci-dessous>'. config.php ne vit que sur le
+      # serveur (jamais dans Git), donc personne ni aucun pipeline ne peut
+      # définir cette ligne à distance — c'est une étape manuelle, une seule
+      # fois, voir docs/DEPLOY.md (dépôt source) étape 5. Tant que ce n'est
+      # pas fait, l'endpoint répond 501 et cette étape échoue intentionnellement
+      # (plutôt que de ne rien faire silencieusement).
+      - name: Application des migrations DB en attente (POST /api/migrate)
+        run: |
+          echo "Appel de https://tools.macerti.com/duration_calculator/api/migrate"
+          curl -sf -X POST \
+            -H "X-Migrate-Secret: ${{ secrets.MIGRATE_SECRET }}" \
+            https://tools.macerti.com/duration_calculator/api/migrate \
+            && echo || {
+              echo "❌ Échec de l'application des migrations — voir docs/DEPLOY.md (dépôt source) étape 5.";
+              echo "   Cause la plus probable la première fois : config.php du serveur n'a pas encore 'migration_secret'.";
+              exit 1;
+            }
+
       # Vérification informative uniquement — n'échoue jamais le workflow,
       # car un backend momentanément indisponible ne veut pas dire que le
       # déploiement des fichiers a échoué.
